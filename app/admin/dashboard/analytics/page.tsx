@@ -1,7 +1,40 @@
+"use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Line, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 
 export default function AnalyticsPage() {
+  // Mock data for charts
+  const issueTrendsData = [
+    { month: "Jan", reported: 120, resolved: 90 },
+    { month: "Feb", reported: 150, resolved: 110 },
+    { month: "Mar", reported: 130, resolved: 100 },
+    { month: "Apr", reported: 180, resolved: 140 },
+    { month: "May", reported: 160, resolved: 130 },
+    { month: "Jun", reported: 200, resolved: 170 },
+  ]
+
+  const issueCategoryData = [
+    { name: "Infrastructure", value: 300 },
+    { name: "Roads", value: 200 },
+    { name: "Utilities", value: 150 },
+    { name: "Environment", value: 100 },
+    { name: "Public Safety", value: 80 },
+    { name: "Other", value: 50 },
+  ]
+
+  const departmentPerformanceData = [
+    { department: "Public Works", resolved: 120, pending: 30 },
+    { department: "Transportation", resolved: 90, pending: 20 },
+    { department: "Utilities", resolved: 70, pending: 15 },
+    { department: "Parks & Rec", resolved: 50, pending: 10 },
+    { department: "Health & Safety", resolved: 40, pending: 5 },
+  ]
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -61,11 +94,74 @@ export default function AnalyticsPage() {
         <TabsContent value="trends" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Issue Trends</CardTitle>
-              <CardDescription>Monthly issue reporting and resolution trends</CardDescription>
+              <CardTitle>Issue Reporting & Resolution Trends</CardTitle>
+              <CardDescription>Monthly trends of reported and resolved issues.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">Trend charts and analysis will be displayed here.</p>
+              <ChartContainer
+                config={{
+                  reported: {
+                    label: "Reported Issues",
+                    color: "hsl(var(--chart-1))",
+                  },
+                  resolved: {
+                    label: "Resolved Issues",
+                    color: "hsl(var(--chart-2))",
+                  },
+                }}
+                className="h-[300px] w-full"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={issueTrendsData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Legend />
+                    <Line type="monotone" dataKey="reported" stroke="var(--color-reported)" activeDot={{ r: 8 }} />
+                    <Line type="monotone" dataKey="resolved" stroke="var(--color-resolved)" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Issues by Category</CardTitle>
+              <CardDescription>Distribution of issues across different categories.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center">
+              <ChartContainer
+                config={{
+                  value: {
+                    label: "Issues",
+                  },
+                }}
+                className="h-[300px] w-full"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={issueCategoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {issueCategoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartContainer>
             </CardContent>
           </Card>
         </TabsContent>
@@ -73,11 +169,35 @@ export default function AnalyticsPage() {
         <TabsContent value="performance" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Department Performance</CardTitle>
-              <CardDescription>Performance metrics by department</CardDescription>
+              <CardTitle>Department Performance Overview</CardTitle>
+              <CardDescription>Issues resolved and pending by department.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">Department performance metrics will be displayed here.</p>
+              <ChartContainer
+                config={{
+                  resolved: {
+                    label: "Resolved",
+                    color: "hsl(var(--chart-1))",
+                  },
+                  pending: {
+                    label: "Pending",
+                    color: "hsl(var(--chart-2))",
+                  },
+                }}
+                className="h-[300px] w-full"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={departmentPerformanceData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="department" />
+                    <YAxis />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Legend />
+                    <Bar dataKey="resolved" fill="var(--color-resolved)" name="Resolved Issues" />
+                    <Bar dataKey="pending" fill="var(--color-pending)" name="Pending Issues" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
             </CardContent>
           </Card>
         </TabsContent>
