@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { Camera, MapPin, Upload } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 
+// Define the form schema using zod
 const formSchema = z.object({
   title: z.string().min(5, {
     message: "Title must be at least 5 characters.",
@@ -36,7 +37,13 @@ const formSchema = z.object({
 export default function ReportIssuePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [locationStatus, setLocationStatus] = useState<{
+    accessed: boolean
+    loading: boolean
+    error?: string
+  }>({ accessed: false, loading: false })
 
+  // Initialize the form
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -50,17 +57,90 @@ export default function ReportIssuePage() {
     },
   })
 
+  // Fetch address from coordinates using OpenStreetMap Nominatim API
+  async function fetchAddressFromCoords(lat: number, lng: number) {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      )
+      const data = await res.json()
+      return data.display_name || `Lat: ${lat}, Lng: ${lng}`
+    } catch (err) {
+      console.error("Error fetching address:", err)
+      return `Lat: ${lat}, Lng: ${lng}`
+    }
+  }
+
+  // Get user location and set it in the form
+  async function getUserLocationAndSet() {
+    setLocationStatus({ accessed: false, loading: true, error: undefined })
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords
+            const address = await fetchAddressFromCoords(latitude, longitude)
+            form.setValue("location", address)
+            setLocationStatus({ accessed: true, loading: false })
+            toast({
+              title: "Location Captured",
+              description: "Your current location has been captured.",
+            })
+          } catch (err) {
+            setLocationStatus({
+              accessed: false,
+              loading: false,
+              error: "Failed to fetch address",
+            })
+            toast({
+              title: "Location Error",
+              description: "We got your coordinates but couldn't fetch the address.",
+              variant: "destructive",
+            })
+          }
+        },
+        (error) => {
+          const errorMessage =
+            error.code === error.PERMISSION_DENIED
+              ? "Location permission denied"
+              : "Unable to fetch your location"
+          setLocationStatus({
+            accessed: false,
+            loading: false,
+            error: errorMessage,
+          })
+          toast({
+            title: "Location Error",
+            description: errorMessage + ". Please enter it manually.",
+            variant: "destructive",
+          })
+        }
+      )
+    } else {
+      setLocationStatus({
+        accessed: false,
+        loading: false,
+        error: "Geolocation not supported",
+      })
+      toast({
+        title: "Location Not Supported",
+        description: "Your browser doesn't support location services.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle form submission
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
 
     try {
-      // In a real app, this would be an API call to submit the issue
       console.log({
         ...values,
         images: uploadedImages,
       })
 
-      // Simulate AI processing
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
       toast({
@@ -68,7 +148,6 @@ export default function ReportIssuePage() {
         description: "Your issue has been successfully reported and is pending moderation.",
       })
 
-      // Reset form
       form.reset()
       setUploadedImages([])
     } catch (error) {
@@ -82,9 +161,8 @@ export default function ReportIssuePage() {
     }
   }
 
+  // Handle image upload
   const handleImageUpload = () => {
-    // In a real app, this would open a file picker and upload the image
-    // For demo purposes, we'll just add a placeholder image
     const newImage = `/placeholder.svg?height=300&width=300&text=Image ${uploadedImages.length + 1}`
     setUploadedImages([...uploadedImages, newImage])
 
@@ -94,19 +172,14 @@ export default function ReportIssuePage() {
     })
   }
 
+  // Toggle use current location
   const handleUseCurrentLocation = (checked: boolean) => {
     form.setValue("useCurrentLocation", checked)
-
     if (checked) {
-      // In a real app, this would get the user's current location
-      form.setValue("location", "Current Location: Sector 2, Main Street")
-
-      toast({
-        title: "Location Captured",
-        description: "Your current location has been captured.",
-      })
+      getUserLocationAndSet()
     } else {
       form.setValue("location", "")
+      setLocationStatus({ accessed: false, loading: false, error: undefined })
     }
   }
 
@@ -229,6 +302,7 @@ export default function ReportIssuePage() {
                                 variant="outline"
                                 size="icon"
                                 disabled={form.watch("useCurrentLocation")}
+                                onClick={() => getUserLocationAndSet()}
                               >
                                 <MapPin className="h-4 w-4" />
                               </Button>
@@ -238,6 +312,23 @@ export default function ReportIssuePage() {
                         </FormItem>
                       )}
                     />
+                    {form.watch("useCurrentLocation") && (
+                      <div className="flex items-center gap-2 text-sm">
+                        {locationStatus.loading ? (
+                          <>
+                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                            <span>Fetching your location...</span>
+                          </>
+                        ) : locationStatus.accessed ? (
+                          <span className="flex items-center gap-1 text-green-600">
+                            <MapPin className="h-4 w-4" />
+                            Location captured successfully
+                          </span>
+                        ) : locationStatus.error ? (
+                          <span className="text-destructive">{locationStatus.error}</span>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                   <FormField
                     control={form.control}
