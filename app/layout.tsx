@@ -10,6 +10,9 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Urban Issue Reporter",
   description: "AI-powered platform for reporting and resolving urban issues",
+  manifest: "/manifest.json",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+  themeColor: "#3b82f6",
 }
 
 export default function RootLayout({

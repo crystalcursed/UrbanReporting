@@ -9,6 +9,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Enable PWA features for mobile
+  experimental: {
+    webpackBuildWorker: true,
+  },
 }
 
 export default nextConfig

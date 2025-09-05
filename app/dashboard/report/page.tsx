@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { Camera, MapPin, Upload } from "lucide-react"
+import { Camera, MapPin, Upload, X, RotateCcw } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
+import { useRef } from "react"
 
 // Define the form schema using zod
 const formSchema = z.object({
@@ -37,6 +38,12 @@ const formSchema = z.object({
 export default function ReportIssuePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [locationStatus, setLocationStatus] = useState<{
     accessed: boolean
     loading: boolean
@@ -162,13 +169,104 @@ export default function ReportIssuePage() {
   }
 
   // Handle image upload
-  const handleImageUpload = () => {
-    const newImage = `/placeholder.svg?height=300&width=300&text=Image ${uploadedImages.length + 1}`
-    setUploadedImages([...uploadedImages, newImage])
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files && files.length > 0) {
+      const file = files[0]
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setUploadedImages([...uploadedImages, e.target.result as string])
+          toast({
+            title: "Image Uploaded",
+            description: "Your image has been uploaded successfully.",
+          })
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
+  // Open camera
+  const openCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facingMode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      })
+      
+      setStream(mediaStream)
+      setIsCameraOpen(true)
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error)
+      toast({
+        title: "Camera Error",
+        description: "Unable to access camera. Please check permissions or use file upload.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Close camera
+  const closeCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop())
+      setStream(null)
+    }
+    setIsCameraOpen(false)
+  }
+
+  // Switch camera (front/back)
+  const switchCamera = async () => {
+    const newFacingMode = facingMode === 'user' ? 'environment' : 'user'
+    setFacingMode(newFacingMode)
+    
+    if (stream) {
+      closeCamera()
+      setTimeout(() => {
+        openCamera()
+      }, 100)
+    }
+  }
+
+  // Capture photo
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      const context = canvas.getContext('2d')
+      
+      if (context) {
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        context.drawImage(video, 0, 0)
+        
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8)
+        setUploadedImages([...uploadedImages, imageDataUrl])
+        
+        closeCamera()
+        
+        toast({
+          title: "Photo Captured",
+          description: "Your photo has been captured successfully.",
+        })
+      }
+    }
+  }
+
+  // Remove image
+  const removeImage = (index: number) => {
+    setUploadedImages(uploadedImages.filter((_, i) => i !== index))
     toast({
-      title: "Image Uploaded",
-      description: "Your image has been uploaded successfully.",
+      title: "Image Removed",
+      description: "Image has been removed from your report.",
     })
   }
 
@@ -357,28 +455,198 @@ export default function ReportIssuePage() {
                     <div>
                       <FormLabel>Images</FormLabel>
                       <FormDescription>
-                        Upload images of the issue to help authorities understand the problem better.
+                        Take photos or upload images of the issue to help authorities understand the problem better.
                       </FormDescription>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                    
+                    {/* Camera Modal */}
+                    {isCameraOpen && (
+                      <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg p-4 w-full max-w-md">
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold">Take a Photo</h3>
+                            <Button variant="ghost" size="icon" onClick={closeCamera}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          
+                          <div className="relative">
+                            <video
+                              ref={videoRef}
+                              autoPlay
+                              playsInline
+                              className="w-full rounded-lg"
+                              style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+                            />
+                            <canvas ref={canvasRef} className="hidden" />
+                          </div>
+                          
+                          <div className="flex justify-center gap-4 mt-4">
+                            <Button variant="outline" onClick={switchCamera}>
+                              <RotateCcw className="h-4 w-4 mr-2" />
+                              Switch Camera
+                            </Button>
+                            <Button onClick={capturePhoto} className="bg-blue-600 hover:bg-blue-700">
+                              <Camera className="h-4 w-4 mr-2" />
+                              Capture
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-4">
+                      {/* Camera and Upload Buttons */}
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={openCamera}
+                        >
+                          <Camera className="h-4 w-4 mr-2" />
+                          Take Photo
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload Image
+                        </Button>
+                      </div>
+                      
+                      {/* Hidden file input */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        multiple
+                      />
+                      
+                      {/* Image Grid */}
+                      {uploadedImages.length > 0 && (
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                          {uploadedImages.map((image, index) => (
+                            <div key={index} className="relative aspect-square overflow-hidden rounded-md border group">
+                              <img
+                                src={image}
+                                alt={`Uploaded image ${index + 1}`}
+                                className="h-full w-full object-cover"
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => removeImage(index)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Add more images button */}
+                      {uploadedImages.length > 0 && uploadedImages.length < 5 && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex aspect-square h-full flex-col items-center justify-center gap-1 rounded-md border border-dashed"
+                            onClick={openCamera}
+                          >
+                            <Camera className="h-6 w-6" />
+                            <span className="text-xs">Take Photo</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex aspect-square h-full flex-col items-center justify-center gap-1 rounded-md border border-dashed"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <Upload className="h-6 w-6" />
+                            <span className="text-xs">Upload Image</span>
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {/* Initial add image buttons when no images */}
+                      {uploadedImages.length === 0 && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex aspect-square h-full flex-col items-center justify-center gap-2 rounded-md border border-dashed min-h-[120px]"
+                            onClick={openCamera}
+                          >
+                            <Camera className="h-8 w-8" />
+                            <span className="text-sm font-medium">Take Photo</span>
+                            <span className="text-xs text-muted-foreground">Use device camera</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex aspect-square h-full flex-col items-center justify-center gap-2 rounded-md border border-dashed min-h-[120px]"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <Upload className="h-8 w-8" />
+                            <span className="text-sm font-medium">Upload Image</span>
+                            <span className="text-xs text-muted-foreground">From gallery</span>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Submitting..." : "Submit Report"}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="guest-report">
+          <Card>
+            <CardHeader>
+              <CardTitle>Guest Report</CardTitle>
+              <CardDescription>
+                Report an issue in a sector other than your own. This will require additional verification.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center gap-4 py-12">
+              <div className="rounded-full bg-muted p-6">
+                <Upload className="h-12 w-12 text-muted-foreground" />
+              </div>
+              <div className="space-y-2 text-center">
+                <h3 className="text-xl font-semibold">Guest Reporting</h3>
+                <p className="text-muted-foreground">
+                  As a guest reporter, your submission will undergo additional AI verification before being sent to
+                  moderators.
+                </p>
+              </div>
+              <Button className="mt-4">Continue as Guest</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
                       {uploadedImages.map((image, index) => (
                         <div key={index} className="relative aspect-square overflow-hidden rounded-md border">
                           <img
-                            src={image || "/placeholder.svg"}
+                            src={image}
                             alt={`Uploaded image ${index + 1}`}
                             className="h-full w-full object-cover"
                           />
                         </div>
                       ))}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="flex aspect-square h-full flex-col items-center justify-center gap-1 rounded-md border border-dashed"
-                        onClick={handleImageUpload}
-                      >
-                        <Camera className="h-8 w-8" />
-                        <span className="text-xs">Add Image</span>
-                      </Button>
                     </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
